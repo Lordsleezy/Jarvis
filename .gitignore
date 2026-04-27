@@ -1,0 +1,5 @@
+node_modules/
+.env
+jarvis.db
+*.log
+local-first/desktop/node_modules/

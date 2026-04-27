@@ -1,0 +1,18 @@
+{
+  "name": "jarvis-native-host",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chrome native messaging host: extension <-> local SQLite (Jarvis memory).",
+  "bin": {
+    "jarvis-native-host": "host.js"
+  },
+  "scripts": {
+    "start": "node host.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.9.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "jarvis-test-harness",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Minimal Electron harness: focus tooltip, AI detection toast, Ctrl+Shift+J inject (Windows, no native deps).",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.2.0"
+  }
+}
