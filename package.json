@@ -1,18 +1,86 @@
 {
   "name": "jarvis",
-  "version": "1.0.0",
-  "main": "index.js",
+  "version": "1.1.0",
+  "description": "Jarvis desktop assistant foundation (local-first, offline-capable).",
+  "main": "main.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "npm run rebuild:electron && electron .",
+    "dev": "npm run rebuild:electron && electron .",
+    "start:api": "npm run rebuild:node && node index.js",
+    "rebuild:electron": "electron-builder install-app-deps",
+    "rebuild:node": "npm rebuild better-sqlite3",
+    "build": "electron-builder",
+    "dist": "electron-builder --publish never"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "keywords": [
+    "electron",
+    "jarvis",
+    "local-first",
+    "ai-assistant"
+  ],
+  "author": "Sentinel Prime",
+  "license": "MIT",
   "dependencies": {
+    "@lancedb/lancedb": "^0.18.1",
+    "auto-launch": "^5.0.6",
     "better-sqlite3": "^12.9.0",
     "dotenv": "^16.4.5",
+    "electron-log": "^5.4.3",
+    "electron-updater": "^6.6.2",
     "express": "^5.2.1",
     "uuid": "^14.0.0"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.sentinelprime.jarvis",
+    "productName": "Jarvis",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "**/*",
+      "!dist/**",
+      "!test-harness/**",
+      "!**/*.log"
+    ],
+    "asar": true,
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg"
+      ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Utility"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Lordsleezy",
+        "repo": "Jarvis"
+      }
+    ]
   }
 }
