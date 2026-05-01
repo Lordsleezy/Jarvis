@@ -3,3 +3,5 @@ node_modules/
 jarvis.db
 *.log
 local-first/desktop/node_modules/
+dist/
+dist-electron/
