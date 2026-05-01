@@ -65,6 +65,12 @@
       flex-direction: column;
       gap: 10px;
     }
+    #chatScreen {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+    }
     .message {
       border: 1px solid var(--panel-border);
       background: rgba(10, 16, 26, 0.7);
@@ -95,7 +101,8 @@
       grid-template-columns: 1fr auto;
       gap: 10px;
     }
-    .composer input {
+    .composer input,
+    .composer select {
       width: 100%;
       border: 1px solid var(--panel-border);
       background: #0a111d;
@@ -125,11 +132,34 @@
       <div class="title">Jarvis Interface</div>
       <div id="status" class="status">Idle</div>
     </header>
-    <section id="chatWindow" class="chat-window" aria-live="polite"></section>
-    <form id="chatForm" class="composer" autocomplete="off">
-      <input id="messageInput" name="message" type="text" placeholder="Type your message..." maxlength="4000" required>
-      <button id="sendButton" type="submit">Send</button>
-    </form>
+    <section id="bootstrapScreen" class="chat-window" aria-live="polite"></section>
+    <section id="setupScreen" class="chat-window" aria-live="polite" hidden>
+      <article class="message system">
+        <span class="role">First Run Setup</span>
+        <div>Tell Jarvis who you are so your local memory starts with useful context.</div>
+      </article>
+      <form id="setupForm" class="composer" autocomplete="off">
+        <input id="nameInput" type="text" placeholder="Your name" maxlength="120" required>
+        <select id="toneInput">
+          <option value="balanced">Balanced tone</option>
+          <option value="direct">Direct tone</option>
+          <option value="friendly">Friendly tone</option>
+        </select>
+        <select id="verbosityInput">
+          <option value="normal">Normal detail</option>
+          <option value="concise">Concise</option>
+          <option value="detailed">Detailed</option>
+        </select>
+        <button id="setupButton" type="submit">Finish Setup</button>
+      </form>
+    </section>
+    <section id="chatScreen" hidden>
+      <section id="chatWindow" class="chat-window" aria-live="polite"></section>
+      <form id="chatForm" class="composer" autocomplete="off">
+        <input id="messageInput" name="message" type="text" placeholder="Type your message..." maxlength="4000" required>
+        <button id="sendButton" type="submit">Send</button>
+      </form>
+    </section>
   </main>
   <script src="./renderer.js"></script>
 </body>

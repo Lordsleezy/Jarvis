@@ -22,4 +22,13 @@ contextBridge.exposeInMainWorld('jarvis', {
     registerModule: (moduleName, defaults) =>
       ipcRenderer.invoke('jarvis:settings', { action: 'registerModule', moduleName, defaults }),
   },
+  bootstrap: {
+    getState: () => ipcRenderer.invoke('jarvis:bootstrap', { action: 'getState' }),
+    completeSetup: (profile) => ipcRenderer.invoke('jarvis:bootstrap', { action: 'completeSetup', profile }),
+    onProgress: (callback) => {
+      const handler = (_event, payload) => callback(payload);
+      ipcRenderer.on('jarvis:bootstrap-progress', handler);
+      return () => ipcRenderer.removeListener('jarvis:bootstrap-progress', handler);
+    },
+  },
 });
