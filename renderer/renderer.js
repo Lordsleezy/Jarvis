@@ -1,19 +1,25 @@
 'use strict';
 
 (function initJarvisRenderer() {
-  const bootstrapScreen = document.getElementById('bootstrapScreen');
-  const setupScreen = document.getElementById('setupScreen');
-  const chatScreen = document.getElementById('chatScreen');
   const chatWindow = document.getElementById('chatWindow');
   const chatForm = document.getElementById('chatForm');
   const messageInput = document.getElementById('messageInput');
   const sendButton = document.getElementById('sendButton');
   const statusEl = document.getElementById('status');
-  const setupForm = document.getElementById('setupForm');
-  const nameInput = document.getElementById('nameInput');
-  const toneInput = document.getElementById('toneInput');
-  const verbosityInput = document.getElementById('verbosityInput');
-  const setupButton = document.getElementById('setupButton');
+
+  const onboarding = {
+    active: false,
+    step: 0,
+    answers: [],
+    name: '',
+  };
+
+  const onboardingPrompts = [
+    'Hello. I am Jarvis, your personal AI assistant. Before we begin, I would like to get to know you. What is your name?',
+    'Nice to meet you, {name}. What do you do for work or what keeps you busy?',
+    'What are some things you would like help with day to day?',
+    'Great context. Is there a communication style you prefer from me (concise, detailed, direct, etc.)?',
+  ];
 
   function setStatus(text, isError) {
     statusEl.textContent = text;
@@ -37,24 +43,48 @@
     chatWindow.scrollTop = chatWindow.scrollHeight;
   }
 
-  function renderBootstrap(message, mode) {
-    bootstrapScreen.innerHTML = '';
-    const card = document.createElement('article');
-    card.className = 'message system';
-    const roleEl = document.createElement('span');
-    roleEl.className = 'role';
-    roleEl.textContent = `Startup ${mode ? `(${mode.toUpperCase()} mode)` : ''}`;
-    const textEl = document.createElement('div');
-    textEl.textContent = message;
-    card.appendChild(roleEl);
-    card.appendChild(textEl);
-    bootstrapScreen.appendChild(card);
+  function nextOnboardingPrompt() {
+    if (onboarding.step >= onboardingPrompts.length) {
+      return 'Perfect. I have everything I need to get started. I am ready to assist you.';
+    }
+    const base = onboardingPrompts[onboarding.step];
+    return base.replace('{name}', onboarding.name || 'there');
   }
 
-  function showPhase(phase) {
-    bootstrapScreen.hidden = phase !== 'bootstrap';
-    setupScreen.hidden = phase !== 'setup';
-    chatScreen.hidden = phase !== 'chat';
+  async function finishOnboarding() {
+    const transcript = onboarding.answers.map((answer, index) => ({
+      question: index === 0
+        ? onboardingPrompts[0]
+        : onboardingPrompts[index].replace('{name}', onboarding.name || 'there'),
+      answer,
+    }));
+
+    await window.jarvis.bootstrap.completeSetup({
+      onboarding: {
+        name: onboarding.name,
+        transcript,
+      },
+    });
+    appendMessage('jarvis', 'Perfect. I have everything I need to get started. I am ready to assist you.');
+    onboarding.active = false;
+    setStatus('Idle');
+  }
+
+  async function handleOnboardingInput(message) {
+    onboarding.answers.push(message);
+    if (onboarding.step === 0) {
+      onboarding.name = message.trim();
+    }
+    onboarding.step += 1;
+
+    if (onboarding.step >= onboardingPrompts.length) {
+      setStatus('Finalizing setup...');
+      await finishOnboarding();
+      return;
+    }
+
+    appendMessage('jarvis', nextOnboardingPrompt());
+    setStatus('Getting to know you...');
   }
 
   chatForm.addEventListener('submit', async (event) => {
@@ -67,12 +97,16 @@
     appendMessage('user', message);
     messageInput.value = '';
     sendButton.disabled = true;
-    setStatus('Thinking...');
 
     try {
-      const payload = await window.jarvis.chat(message);
-      appendMessage('jarvis', payload.response);
-      setStatus('Idle');
+      if (onboarding.active) {
+        await handleOnboardingInput(message);
+      } else {
+        setStatus('Thinking...');
+        const payload = await window.jarvis.chat(message);
+        appendMessage('jarvis', payload.response);
+        setStatus('Idle');
+      }
     } catch (err) {
       appendMessage('system', `Error: ${err.message}`);
       setStatus('Connection issue', true);
@@ -82,56 +116,26 @@
     }
   });
 
-  setupForm.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const name = nameInput.value.trim();
-    if (!name) {
-      return;
-    }
-    setupButton.disabled = true;
-    setStatus('Saving profile...');
-    try {
-      await window.jarvis.bootstrap.completeSetup({
-        name,
-        tone: toneInput.value,
-        verbosity: verbosityInput.value,
-      });
-      showPhase('chat');
-      appendMessage('system', `Setup complete. Welcome, ${name}.`);
-      setStatus('Idle');
-    } catch (err) {
-      setStatus('Setup failed', true);
-      renderBootstrap(`Setup error: ${err.message}`, null);
-      showPhase('bootstrap');
-    } finally {
-      setupButton.disabled = false;
-    }
-  });
-
-  window.jarvis.bootstrap.onProgress((state) => {
-    renderBootstrap(state.statusMessage, state.mode);
-  });
-
   (async () => {
     const state = await window.jarvis.bootstrap.getState();
-    renderBootstrap(state.statusMessage, state.mode);
     if (state.setupInProgress) {
-      showPhase('bootstrap');
       setStatus('Preparing...');
       return;
     }
     if (state.setupRequired) {
-      showPhase('setup');
-      setStatus('Setup required');
-      nameInput.focus();
+      onboarding.active = true;
+      onboarding.step = 0;
+      onboarding.answers = [];
+      onboarding.name = '';
+      appendMessage('jarvis', nextOnboardingPrompt());
+      setStatus('Setup conversation');
+      messageInput.focus();
       return;
     }
-    showPhase('chat');
     appendMessage('system', 'Jarvis terminal online. Enter a message to begin.');
     setStatus('Idle');
   })().catch((err) => {
-    showPhase('bootstrap');
-    renderBootstrap(`Startup failed: ${err.message}`, null);
+    appendMessage('system', `Startup failed: ${err.message}`);
     setStatus('Startup error', true);
   });
 })();

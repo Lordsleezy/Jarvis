@@ -133,7 +133,7 @@ async function initializeMemoryStore(basePath) {
     return vectorTable;
   }
 
-  async function saveMemory(category, content, source = '') {
+  async function saveMemory(category, content, source = '', options = {}) {
     const cat = normalizeCategory(category);
     const text = String(content || '').trim();
     if (!text) {
@@ -142,20 +142,30 @@ async function initializeMemoryStore(basePath) {
     const src = source === undefined || source === null ? '' : String(source).trim();
     const id = randomUUID();
     const row = insertMemory.get(id, cat, text, src);
-    const embedding = await getEmbedding(text);
-    const vectorRow = {
-      id: row.id,
-      vector: embedding,
-      content: row.content,
-      category: row.category,
-      source: row.source,
-      timestamp: row.timestamp,
-    };
-    if (!hasVectorTable) {
-      await ensureVectorTable(vectorRow);
-    } else {
-      await vectorTable.add([vectorRow]);
+
+    const shouldSkipEmbedding = Boolean(options && options.skipEmbedding);
+    if (!shouldSkipEmbedding) {
+      try {
+        const embedding = await getEmbedding(text);
+        const vectorRow = {
+          id: row.id,
+          vector: embedding,
+          content: row.content,
+          category: row.category,
+          source: row.source,
+          timestamp: row.timestamp,
+        };
+        if (!hasVectorTable) {
+          await ensureVectorTable(vectorRow);
+        } else {
+          await vectorTable.add([vectorRow]);
+        }
+      } catch (err) {
+        // Keep SQLite as source of truth even if vectorization is unavailable.
+        console.warn('Vector embedding unavailable for memory save:', err.message || err);
+      }
     }
+
     return row;
   }
 
@@ -197,7 +207,12 @@ async function initializeMemoryStore(basePath) {
     if (!vectorTable) {
       return [];
     }
-    const embedding = await getEmbedding(q);
+    let embedding;
+    try {
+      embedding = await getEmbedding(q);
+    } catch (_err) {
+      return [];
+    }
     const rows = await vectorTable.search(embedding).limit(max).toArray();
     return rows.map((row) => ({
       id: row.id,
