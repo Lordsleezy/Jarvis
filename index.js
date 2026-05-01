@@ -8,6 +8,7 @@ const memoryRouter = require('./routes/memory');
 const chatRouter = require('./routes/chat');
 const { initializeMemoryStore } = require('./memory/db');
 const { createChatService } = require('./services/chat-service');
+const { createSettingsManager } = require('./services/settings');
 
 async function startApiServer() {
   const app = express();
@@ -16,7 +17,8 @@ async function startApiServer() {
   const userDataPath =
     process.env.JARVIS_USER_DATA_PATH || path.resolve(__dirname, '.jarvis-user-data');
   const memoryApi = await initializeMemoryStore(userDataPath);
-  const chatService = createChatService({ memoryApi });
+  const settings = createSettingsManager(userDataPath);
+  const chatService = createChatService({ memoryApi, settings });
 
   app.use(express.json());
   app.use((req, res, next) => {

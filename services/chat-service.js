@@ -7,13 +7,29 @@ const OLLAMA_TIMEOUT_MS = process.env.OLLAMA_TIMEOUT_MS
   ? Number(process.env.OLLAMA_TIMEOUT_MS)
   : 120000;
 
-function createChatService({ memoryApi }) {
-  async function generateResponse(message) {
-    const userMessage = String(message || '').trim();
-    if (!userMessage) {
-      throw new TypeError('message must be a non-empty string');
-    }
+function createChatService({ memoryApi, settings }) {
+  function resolveMode() {
+    return settings.get('runtimeMode', 'local');
+  }
 
+  async function queryPowerMode(userMessage) {
+    const remoteServerUrl = settings.get('remoteServerUrl', 'http://192.168.0.117:3001');
+    const response = await fetch(`${remoteServerUrl.replace(/\/$/, '')}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: userMessage }),
+    });
+    if (!response.ok) {
+      const details = await response.text().catch(() => '');
+      const err = new Error(`Remote Jarvis request failed (${response.status}) ${details.slice(0, 120)}`);
+      err.statusCode = 502;
+      throw err;
+    }
+    const payload = await response.json();
+    return typeof payload.response === 'string' ? payload.response : '';
+  }
+
+  async function queryLocalMode(userMessage) {
     const context = await memoryApi.exportSmartContext(userMessage);
     const prompt = context.length > 0 ? `${context}\n\nUser: ${userMessage}` : userMessage;
 
@@ -44,7 +60,19 @@ function createChatService({ memoryApi }) {
     }
 
     const data = await ollamaRes.json();
-    const text = typeof data.response === 'string' ? data.response : String(data.response || '');
+    return typeof data.response === 'string' ? data.response : String(data.response || '');
+  }
+
+  async function generateResponse(message) {
+    const userMessage = String(message || '').trim();
+    if (!userMessage) {
+      throw new TypeError('message must be a non-empty string');
+    }
+
+    const mode = resolveMode();
+    const text = mode === 'power'
+      ? await queryPowerMode(userMessage)
+      : await queryLocalMode(userMessage);
 
     await memoryApi.saveMemory('fact', userMessage, 'conversation');
     if (text.trim()) {
