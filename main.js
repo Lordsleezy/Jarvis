@@ -2,6 +2,7 @@
 
 require('dotenv').config();
 
+const fs = require('fs');
 const path = require('path');
 const {
   app,
@@ -11,6 +12,7 @@ const {
   nativeImage,
   ipcMain,
   Notification,
+  dialog,
 } = require('electron');
 const AutoLaunch = require('auto-launch');
 const log = require('electron-log/main');
@@ -23,6 +25,7 @@ const { JarvisCore } = require('./core/jarvis-core');
 const { detectRuntimeMode, isUrlReachable } = require('./services/mode-manager');
 const { ensureOllamaReady } = require('./services/ollama-installer');
 
+console.log('[Jarvis][startup] main.js loaded');
 log.initialize();
 autoUpdater.logger = log;
 autoUpdater.autoDownload = true;
@@ -64,6 +67,88 @@ let bootstrapState = {
   setupInProgress: true,
   statusMessage: 'Booting Jarvis',
 };
+let startupPhase = 'boot';
+let fatalDialogShown = false;
+
+function getCrashLogPath() {
+  try {
+    const baseDir = app.isReady()
+      ? app.getPath('userData')
+      : path.join(process.cwd(), 'jarvis-crash-logs');
+    fs.mkdirSync(baseDir, { recursive: true });
+    return path.join(baseDir, 'startup-errors.log');
+  } catch (_err) {
+    return path.join(process.cwd(), 'jarvis-startup-errors.log');
+  }
+}
+
+function serializeError(err) {
+  if (!err) {
+    return 'Unknown error';
+  }
+  if (err instanceof Error) {
+    return `${err.name}: ${err.message}\n${err.stack || ''}`;
+  }
+  try {
+    return JSON.stringify(err, null, 2);
+  } catch (_jsonErr) {
+    return String(err);
+  }
+}
+
+function writeCrashLog(title, err) {
+  const payload = [
+    '============================================================',
+    `[${new Date().toISOString()}] ${title}`,
+    `phase=${startupPhase}`,
+    `platform=${process.platform} arch=${process.arch}`,
+    serializeError(err),
+    '',
+  ].join('\n');
+
+  try {
+    const filePath = getCrashLogPath();
+    fs.appendFileSync(filePath, payload, 'utf8');
+    console.error(`[Jarvis][fatal] ${title}. Logged to ${filePath}`);
+  } catch (writeErr) {
+    console.error('[Jarvis][fatal] Failed to write crash log:', writeErr);
+    console.error(payload);
+  }
+}
+
+async function showFatalStartupDialog(title, err) {
+  if (fatalDialogShown) {
+    return;
+  }
+  fatalDialogShown = true;
+  const message = `${title}\n\n${serializeError(err).slice(0, 4000)}`;
+  try {
+    if (app.isReady()) {
+      await dialog.showMessageBox({
+        type: 'error',
+        title: 'Jarvis Startup Crash',
+        message: 'Jarvis failed during startup.',
+        detail: message,
+      });
+    }
+  } catch (dialogErr) {
+    console.error('[Jarvis][fatal] Could not show startup dialog:', dialogErr);
+  }
+}
+
+function installGlobalCrashHandlers() {
+  process.on('unhandledRejection', async (reason) => {
+    writeCrashLog('Unhandled Rejection', reason);
+    await showFatalStartupDialog('Unhandled Rejection', reason);
+  });
+
+  process.on('uncaughtException', async (error) => {
+    writeCrashLog('Uncaught Exception', error);
+    await showFatalStartupDialog('Uncaught Exception', error);
+  });
+}
+
+installGlobalCrashHandlers();
 
 function setBootstrapState(patch) {
   bootstrapState = { ...bootstrapState, ...patch };
@@ -77,6 +162,7 @@ function createTrayIcon() {
 }
 
 function createMainWindow() {
+  console.log('[Jarvis][startup] createMainWindow');
   const win = new BrowserWindow({
     width: 1040,
     height: 760,
@@ -94,12 +180,20 @@ function createMainWindow() {
     },
   });
 
-  win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  win.loadFile(path.join(__dirname, 'renderer', 'index.html')).catch((err) => {
+    writeCrashLog('Renderer load failed', err);
+  });
   win.on('close', (event) => {
     if (!app.isQuiting) {
       event.preventDefault();
       win.hide();
     }
+  });
+  win.webContents.on('render-process-gone', (_event, details) => {
+    writeCrashLog('Renderer process gone', details);
+  });
+  win.webContents.on('did-fail-load', (_event, code, desc, url) => {
+    writeCrashLog('did-fail-load', { code, desc, url });
   });
   return win;
 }
@@ -131,8 +225,10 @@ function buildTrayMenu() {
 }
 
 function configureAutoUpdater() {
+  console.log('[Jarvis][startup] configureAutoUpdater');
   autoUpdater.on('error', (err) => {
     log.error('Auto updater error:', err);
+    writeCrashLog('Auto updater error', err);
   });
 
   autoUpdater.on('update-downloaded', () => {
@@ -146,33 +242,45 @@ function configureAutoUpdater() {
 
   autoUpdater.checkForUpdates().catch((err) => {
     log.error('Update check failed:', err);
+    writeCrashLog('Update check failed', err);
   });
 }
 
 function wireIpc() {
+  console.log('[Jarvis][startup] wireIpc');
   ipcMain.handle('jarvis:chat', async (_event, payload) => {
-    if (bootstrapState.setupRequired || bootstrapState.setupInProgress) {
-      throw new Error('Jarvis setup is not complete yet.');
+    try {
+      if (bootstrapState.setupRequired || bootstrapState.setupInProgress) {
+        throw new Error('Jarvis setup is not complete yet.');
+      }
+      const message = typeof payload?.message === 'string' ? payload.message : '';
+      return await chatService.generateResponse(message);
+    } catch (err) {
+      writeCrashLog('IPC jarvis:chat failed', err);
+      throw err;
     }
-    const message = typeof payload?.message === 'string' ? payload.message : '';
-    return chatService.generateResponse(message);
   });
 
   ipcMain.handle('jarvis:memory', async (_event, payload = {}) => {
     const action = payload.action;
-    if (action === 'save') {
-      return memoryApi.saveMemory(payload.category, payload.content, payload.source);
+    try {
+      if (action === 'save') {
+        return await memoryApi.saveMemory(payload.category, payload.content, payload.source);
+      }
+      if (action === 'list') {
+        return memoryApi.getAllMemories();
+      }
+      if (action === 'delete') {
+        return { removed: memoryApi.deleteMemory(payload.id) };
+      }
+      if (action === 'exportContext') {
+        return { context: memoryApi.exportContextString() };
+      }
+      throw new TypeError('Unsupported memory action');
+    } catch (err) {
+      writeCrashLog('IPC jarvis:memory failed', err);
+      throw err;
     }
-    if (action === 'list') {
-      return memoryApi.getAllMemories();
-    }
-    if (action === 'delete') {
-      return { removed: memoryApi.deleteMemory(payload.id) };
-    }
-    if (action === 'exportContext') {
-      return { context: await memoryApi.exportSmartContext(payload.query || '') };
-    }
-    throw new TypeError('Unsupported memory action');
   });
 
   ipcMain.handle('jarvis:search', async (_event, payload = {}) => {
@@ -213,20 +321,40 @@ function wireIpc() {
     }
     if (action === 'completeSetup') {
       const profile = payload.profile || {};
-      const userName = String(profile.name || '').trim();
-      const tone = String(profile.tone || 'balanced').trim();
-      const verbosity = String(profile.verbosity || 'normal').trim();
+      const onboardingPayload = profile.onboarding || {};
+      const userName = String(onboardingPayload.name || '').trim();
+      const transcript = Array.isArray(onboardingPayload.transcript)
+        ? onboardingPayload.transcript
+        : [];
       if (!userName) {
         throw new TypeError('name is required');
       }
 
-      await memoryApi.saveMemory('personal', `User name is ${userName}.`, 'first-run-setup');
-      await memoryApi.saveMemory('preference', `Preferred assistant tone: ${tone}.`, 'first-run-setup');
-      await memoryApi.saveMemory('preference', `Preferred response verbosity: ${verbosity}.`, 'first-run-setup');
+      await memoryApi.saveMemory(
+        'personal',
+        `User name is ${userName}.`,
+        'first-run-setup'
+      );
+
+      for (const entry of transcript) {
+        const answer = String(entry?.answer || '').trim();
+        if (!answer) {
+          continue;
+        }
+        const question = String(entry?.question || '').trim();
+        const memoryText = question
+          ? `Q: ${question}\nA: ${answer}`
+          : answer;
+        await memoryApi.saveMemory(
+          'fact',
+          memoryText,
+          'first-run-chat'
+        );
+      }
 
       settings.set('setupComplete', true);
       settings.set('profileName', userName);
-      settings.set('setupPreferences', { tone, verbosity });
+      settings.set('setupTranscriptCount', transcript.length);
       setBootstrapState({
         setupComplete: true,
         setupRequired: false,
@@ -240,6 +368,7 @@ function wireIpc() {
 }
 
 async function runBootstrap() {
+  console.log('[Jarvis][startup] runBootstrap');
   settings.registerModuleSettings('core', {
     remoteServerUrl: 'http://192.168.0.117:3001',
   });
@@ -248,6 +377,22 @@ async function runBootstrap() {
   }
   if (!settings.get('localOllamaHealthUrl', null)) {
     settings.set('localOllamaHealthUrl', 'http://localhost:11434');
+  }
+
+  const setupComplete = settings.get('setupComplete', false);
+  if (!setupComplete) {
+    settings.set('runtimeMode', settings.get('runtimeMode', 'local'));
+    setBootstrapState({
+      mode: settings.get('runtimeMode', 'local'),
+      remoteReachable: false,
+      localReachable: false,
+      ollamaReady: false,
+      setupComplete: false,
+      setupRequired: true,
+      setupInProgress: false,
+      statusMessage: 'First run setup required',
+    });
+    return;
   }
 
   setBootstrapState({
@@ -271,6 +416,7 @@ async function runBootstrap() {
       setBootstrapState({ ollamaReady: true });
     } catch (err) {
       log.error('Ollama setup failed:', err);
+      writeCrashLog('Ollama setup failed', err);
       setBootstrapState({
         ollamaReady: false,
         statusMessage: 'Local AI setup failed. Install Ollama and restart Jarvis.',
@@ -283,7 +429,6 @@ async function runBootstrap() {
     });
   }
 
-  const setupComplete = settings.get('setupComplete', false);
   setBootstrapState({
     setupComplete,
     setupRequired: !setupComplete,
@@ -293,6 +438,7 @@ async function runBootstrap() {
 }
 
 app.on('second-instance', () => {
+  console.log('[Jarvis] second-instance event');
   if (mainWindow) {
     mainWindow.show();
     mainWindow.focus();
@@ -300,49 +446,108 @@ app.on('second-instance', () => {
 });
 
 app.whenReady().then(async () => {
-  settings = createSettingsManager(app.getPath('userData'));
-  memoryApi = await memoryStore.initializeMemoryStore(app.getPath('userData'));
-  chatService = createChatService({ memoryApi, settings });
-  modules = createModuleLoader({
-    modulesPath: path.join(__dirname, 'modules'),
-    moduleNames,
-    jarvisCore,
-    settings,
-  });
+  try {
+    startupPhase = 'settings-init';
+    console.log('[Jarvis][startup] app ready');
+    console.log('[Jarvis][startup] userData path:', app.getPath('userData'));
 
-  await modules.initializeAll();
+    settings = createSettingsManager(app.getPath('userData'));
+    console.log('[Jarvis][startup] settings ready');
 
-  autoLauncher = new AutoLaunch({ name: 'Jarvis' });
-  autoLauncher.enable().catch((err) => log.error('Auto-launch setup failed:', err));
+    startupPhase = 'memory-init';
+    memoryApi = await memoryStore.initializeMemoryStore(app.getPath('userData'));
+    console.log('[Jarvis][startup] memory store ready');
 
-  mainWindow = createMainWindow();
-  mainWindow.show();
-  tray = new Tray(createTrayIcon());
-  tray.setToolTip('Jarvis');
-  tray.setContextMenu(buildTrayMenu());
-  tray.on('click', toggleWindow);
+    startupPhase = 'chat-service-init';
+    chatService = createChatService({ memoryApi, settings });
+    console.log('[Jarvis][startup] chat service ready');
 
-  wireIpc();
-  await runBootstrap();
-  tray.setContextMenu(buildTrayMenu());
-  configureAutoUpdater();
+    startupPhase = 'module-loader-init';
+    modules = createModuleLoader({
+      modulesPath: path.join(__dirname, 'modules'),
+      moduleNames,
+      jarvisCore,
+      settings,
+    });
+    await modules.initializeAll();
+    console.log('[Jarvis][startup] modules initialized');
+
+    startupPhase = 'auto-launch-init';
+    autoLauncher = new AutoLaunch({ name: 'Jarvis' });
+    autoLauncher.enable().catch((err) => {
+      writeCrashLog('Auto-launch setup failed', err);
+      log.error('Auto-launch setup failed:', err);
+    });
+    console.log('[Jarvis][startup] auto-launch configured');
+
+    startupPhase = 'window-init';
+    mainWindow = createMainWindow();
+    mainWindow.show();
+    console.log('[Jarvis][startup] main window shown');
+
+    startupPhase = 'tray-init';
+    tray = new Tray(createTrayIcon());
+    tray.setToolTip('Jarvis');
+    tray.setContextMenu(buildTrayMenu());
+    tray.on('click', toggleWindow);
+    console.log('[Jarvis][startup] tray ready');
+
+    startupPhase = 'ipc-init';
+    wireIpc();
+    console.log('[Jarvis][startup] ipc ready');
+
+    startupPhase = 'bootstrap-run';
+    await runBootstrap();
+    tray.setContextMenu(buildTrayMenu());
+    console.log('[Jarvis][startup] bootstrap complete');
+
+    startupPhase = 'updater-init';
+    configureAutoUpdater();
+    console.log('[Jarvis][startup] updater configured');
+
+    startupPhase = 'ready';
+    console.log('[Jarvis][startup] startup completed successfully');
+  } catch (err) {
+    writeCrashLog('Fatal startup failure', err);
+    await showFatalStartupDialog('Fatal startup failure', err);
+    app.quit();
+  }
+}).catch(async (err) => {
+  writeCrashLog('app.whenReady rejection', err);
+  await showFatalStartupDialog('app.whenReady rejection', err);
+  app.quit();
 });
 
 app.on('activate', () => {
-  if (mainWindow) {
-    mainWindow.show();
+  try {
+    console.log('[Jarvis] activate event');
+    if (mainWindow) {
+      mainWindow.show();
+    }
+  } catch (err) {
+    writeCrashLog('activate handler failed', err);
   }
 });
 
 app.on('before-quit', async () => {
-  app.isQuiting = true;
-  if (modules) {
-    await modules.shutdownAll();
+  try {
+    console.log('[Jarvis] before-quit event');
+    app.isQuiting = true;
+    if (modules) {
+      await modules.shutdownAll();
+    }
+  } catch (err) {
+    writeCrashLog('before-quit handler failed', err);
   }
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    // Keep running as tray app.
+  try {
+    console.log('[Jarvis] window-all-closed event');
+    if (process.platform !== 'darwin') {
+      // Keep running as tray app.
+    }
+  } catch (err) {
+    writeCrashLog('window-all-closed handler failed', err);
   }
 });

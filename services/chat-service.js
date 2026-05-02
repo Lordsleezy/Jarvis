@@ -1,5 +1,10 @@
 'use strict';
 
+const {
+  isLegionReachable,
+  DEFAULT_REMOTE_SERVER_URL,
+} = require('./mode-manager');
+
 const OLLAMA_GENERATE_URL =
   process.env.OLLAMA_URL || 'http://localhost:11434/api/generate';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3';
@@ -9,11 +14,15 @@ const OLLAMA_TIMEOUT_MS = process.env.OLLAMA_TIMEOUT_MS
 
 function createChatService({ memoryApi, settings }) {
   function resolveMode() {
-    return settings.get('runtimeMode', 'local');
+    return settings.get('runtimeMode', 'local') === 'power' ? 'power' : 'local';
+  }
+
+  function setLocalMode() {
+    settings.set('runtimeMode', 'local');
   }
 
   async function queryPowerMode(userMessage) {
-    const remoteServerUrl = settings.get('remoteServerUrl', 'http://192.168.0.117:3001');
+    const remoteServerUrl = settings.get('remoteServerUrl', DEFAULT_REMOTE_SERVER_URL);
     const response = await fetch(`${remoteServerUrl.replace(/\/$/, '')}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -30,7 +39,7 @@ function createChatService({ memoryApi, settings }) {
   }
 
   async function queryLocalMode(userMessage) {
-    const context = await memoryApi.exportSmartContext(userMessage);
+    const context = memoryApi.exportContextString();
     const prompt = context.length > 0 ? `${context}\n\nUser: ${userMessage}` : userMessage;
 
     const controller = new AbortController();
@@ -70,9 +79,25 @@ function createChatService({ memoryApi, settings }) {
     }
 
     const mode = resolveMode();
-    const text = mode === 'power'
-      ? await queryPowerMode(userMessage)
-      : await queryLocalMode(userMessage);
+    let text = '';
+
+    if (mode === 'power') {
+      const remoteServerUrl = settings.get('remoteServerUrl', DEFAULT_REMOTE_SERVER_URL);
+      const reachable = await isLegionReachable(remoteServerUrl);
+      if (reachable) {
+        try {
+          text = await queryPowerMode(userMessage);
+        } catch (_err) {
+          setLocalMode();
+          text = await queryLocalMode(userMessage);
+        }
+      } else {
+        setLocalMode();
+        text = await queryLocalMode(userMessage);
+      }
+    } else {
+      text = await queryLocalMode(userMessage);
+    }
 
     await memoryApi.saveMemory('fact', userMessage, 'conversation');
     if (text.trim()) {
