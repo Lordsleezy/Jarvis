@@ -6,11 +6,6 @@ const fs = require('fs');
 const path = require('path');
 const { randomUUID } = require('crypto');
 const Database = require('better-sqlite3');
-const lancedb = require('@lancedb/lancedb');
-
-const OLLAMA_EMBED_URL =
-  process.env.OLLAMA_EMBED_URL || 'http://localhost:11434/api/embeddings';
-const OLLAMA_EMBED_MODEL = process.env.OLLAMA_EMBED_MODEL || 'nomic-embed-text';
 
 const VALID_CATEGORIES = new Set([
   'personal',
@@ -35,27 +30,19 @@ function normalizeCategory(category) {
   return c;
 }
 
-async function getEmbedding(input) {
-  const text = String(input || '').trim();
-  if (!text) {
-    throw new TypeError('Embedding input must not be empty');
+function uniqueQueryTokens(query) {
+  const seen = new Set();
+  const tokens = [];
+  for (const t of String(query || '')
+    .trim()
+    .split(/\s+/)) {
+    if (!t) continue;
+    const key = t.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    tokens.push(t);
   }
-  const response = await fetch(OLLAMA_EMBED_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: OLLAMA_EMBED_MODEL,
-      prompt: text,
-    }),
-  });
-  if (!response.ok) {
-    throw new Error(`Ollama embedding request failed (${response.status})`);
-  }
-  const payload = await response.json();
-  if (!Array.isArray(payload.embedding) || payload.embedding.length === 0) {
-    throw new Error('Ollama embedding payload missing embedding array');
-  }
-  return payload.embedding;
+  return tokens;
 }
 
 async function initializeMemoryStore(basePath) {
@@ -70,8 +57,6 @@ async function initializeMemoryStore(basePath) {
 
   fs.mkdirSync(dataRoot, { recursive: true });
   const sqlitePath = path.join(dataRoot, 'jarvis.db');
-  const vectorPath = path.join(dataRoot, 'vector-memory');
-  fs.mkdirSync(vectorPath, { recursive: true });
 
   const db = new Database(sqlitePath);
   db.pragma('journal_mode = WAL');
@@ -115,25 +100,7 @@ async function initializeMemoryStore(basePath) {
     DELETE FROM memories WHERE id = ?
   `);
 
-  const vectorDb = await lancedb.connect(vectorPath);
-  const tableNames = await vectorDb.tableNames();
-  let hasVectorTable = tableNames.includes('memories');
-  let vectorTable = null;
-
-  if (hasVectorTable) {
-    vectorTable = await vectorDb.openTable('memories');
-  }
-
-  async function ensureVectorTable(firstRow) {
-    if (vectorTable) {
-      return vectorTable;
-    }
-    vectorTable = await vectorDb.createTable('memories', [firstRow]);
-    hasVectorTable = true;
-    return vectorTable;
-  }
-
-  async function saveMemory(category, content, source = '') {
+  function saveMemory(category, content, source = '', _options = {}) {
     const cat = normalizeCategory(category);
     const text = String(content || '').trim();
     if (!text) {
@@ -141,22 +108,7 @@ async function initializeMemoryStore(basePath) {
     }
     const src = source === undefined || source === null ? '' : String(source).trim();
     const id = randomUUID();
-    const row = insertMemory.get(id, cat, text, src);
-    const embedding = await getEmbedding(text);
-    const vectorRow = {
-      id: row.id,
-      vector: embedding,
-      content: row.content,
-      category: row.category,
-      source: row.source,
-      timestamp: row.timestamp,
-    };
-    if (!hasVectorTable) {
-      await ensureVectorTable(vectorRow);
-    } else {
-      await vectorTable.add([vectorRow]);
-    }
-    return row;
+    return insertMemory.get(id, cat, text, src);
   }
 
   function getAllMemories() {
@@ -182,43 +134,33 @@ async function initializeMemoryStore(basePath) {
     }
     const memoryId = String(id).trim();
     const result = deleteMemoryStmt.run(memoryId);
-    if (vectorTable) {
-      vectorTable.delete(`id = '${memoryId.replace(/'/g, "''")}'`).catch(() => {});
-    }
     return result.changes > 0;
   }
 
-  async function findRelevantMemories(query, limit = 5) {
-    const q = String(query || '').trim();
+  function findRelevantMemories(query, limit = 5) {
     const max = Number(limit) > 0 ? Number(limit) : 5;
-    if (!q) {
+    const tokens = uniqueQueryTokens(query);
+    if (tokens.length === 0) {
       return [];
     }
-    if (!vectorTable) {
-      return [];
-    }
-    const embedding = await getEmbedding(q);
-    const rows = await vectorTable.search(embedding).limit(max).toArray();
+
+    const conditions = tokens.map(() => 'INSTR(LOWER(content), LOWER(?)) > 0').join(' AND ');
+    const sql = `
+      SELECT id, timestamp, category, content, source
+      FROM memories
+      WHERE ${conditions}
+      ORDER BY timestamp DESC, id DESC
+      LIMIT ?
+    `;
+    const stmt = db.prepare(sql);
+    const rows = stmt.all(...tokens, max);
     return rows.map((row) => ({
       id: row.id,
       content: row.content,
       category: row.category,
       source: row.source,
       timestamp: row.timestamp,
-      score: row._distance,
     }));
-  }
-
-  async function exportSmartContext(query) {
-    const relevant = await findRelevantMemories(query, 10);
-    if (relevant.length === 0) {
-      return 'No relevant Jarvis memories found.';
-    }
-    const contextLines = relevant.map((m, index) => {
-      const src = m.source ? ` [${m.source}]` : '';
-      return `${index + 1}. (${m.category}${src}) ${m.content}`;
-    });
-    return `Jarvis Relevant Memory Context:\n${contextLines.join('\n')}`;
   }
 
   function exportContextString() {
@@ -243,7 +185,6 @@ async function initializeMemoryStore(basePath) {
     deleteMemory,
     exportContextString,
     findRelevantMemories,
-    exportSmartContext,
   };
 
   return memoryApi;
