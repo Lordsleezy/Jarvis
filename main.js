@@ -274,7 +274,7 @@ function wireIpc() {
         return { removed: memoryApi.deleteMemory(payload.id) };
       }
       if (action === 'exportContext') {
-        return { context: memoryApi.exportContextString() };
+        return { context: await memoryApi.exportSmartContext(payload.query || '') };
       }
       throw new TypeError('Unsupported memory action');
     } catch (err) {
@@ -333,7 +333,8 @@ function wireIpc() {
       await memoryApi.saveMemory(
         'personal',
         `User name is ${userName}.`,
-        'first-run-setup'
+        'first-run-setup',
+        { skipEmbedding: true }
       );
 
       for (const entry of transcript) {
@@ -348,7 +349,8 @@ function wireIpc() {
         await memoryApi.saveMemory(
           'fact',
           memoryText,
-          'first-run-chat'
+          'first-run-chat',
+          { skipEmbedding: true }
         );
       }
 
