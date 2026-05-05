@@ -1,5 +1,11 @@
 node_modules/
 .env
-jarvis.db
+*.db
+*.db-shm
+*.db-wal
 *.log
 local-first/desktop/node_modules/
+dist/
+dist-electron/
+.jarvis-user-data/
+build/installers/
