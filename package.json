@@ -1,6 +1,6 @@
 {
   "name": "jarvis",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Jarvis desktop assistant foundation (local-first, offline-capable).",
   "main": "main.js",
   "scripts": {
