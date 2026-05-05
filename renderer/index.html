@@ -3,134 +3,224 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Jarvis</title>
+  <title>JARVIS</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <style>
-    :root {
-      --bg: #070b12;
-      --panel: #0c1320;
-      --panel-border: #1b2a42;
-      --text: #c7d6f3;
-      --muted: #7f95be;
-      --accent: #46d6ff;
-      --accent-soft: rgba(70, 214, 255, 0.2);
-      --danger: #ff7f9f;
-      --user: #9df1ff;
-      --jarvis: #c4ff9d;
-    }
-    * { box-sizing: border-box; }
-    html, body {
-      margin: 0;
-      height: 100%;
-      background: radial-gradient(circle at 20% 0%, #101b2f 0%, var(--bg) 40%, #05070b 100%);
-      color: var(--text);
-      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    }
-    body { display: flex; align-items: center; justify-content: center; padding: 20px; }
-    .terminal {
-      width: min(980px, 100%);
-      height: min(92vh, 760px);
-      background: linear-gradient(180deg, rgba(14, 22, 36, 0.95), rgba(8, 13, 22, 0.98));
-      border: 1px solid var(--panel-border);
-      border-radius: 14px;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      box-shadow: 0 20px 70px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(70, 214, 255, 0.1) inset;
-    }
-    .terminal-header {
-      padding: 14px 16px;
-      border-bottom: 1px solid var(--panel-border);
-      background: rgba(9, 15, 25, 0.8);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-    .title {
-      font-size: 14px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--accent);
-      text-shadow: 0 0 10px rgba(70, 214, 255, 0.45);
-    }
-    .status { font-size: 12px; color: var(--muted); }
-    .chat-window {
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .message {
-      border: 1px solid var(--panel-border);
-      background: rgba(10, 16, 26, 0.7);
-      border-radius: 10px;
-      padding: 10px 12px;
-      line-height: 1.5;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-    .message .role {
-      display: block;
-      font-size: 12px;
-      margin-bottom: 4px;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: var(--muted);
-    }
-    .message.user { border-color: rgba(157, 241, 255, 0.35); background: rgba(26, 45, 56, 0.35); }
-    .message.user .role { color: var(--user); }
-    .message.jarvis { border-color: rgba(196, 255, 157, 0.28); background: rgba(35, 49, 33, 0.35); }
-    .message.jarvis .role { color: var(--jarvis); }
-    .message.system { border-style: dashed; color: var(--muted); }
-    .composer {
-      border-top: 1px solid var(--panel-border);
-      background: rgba(8, 13, 22, 0.94);
-      padding: 12px;
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 10px;
-    }
-    .composer input {
-      width: 100%;
-      border: 1px solid var(--panel-border);
-      background: #0a111d;
-      color: var(--text);
-      border-radius: 10px;
-      padding: 12px 14px;
-      font: inherit;
-      outline: none;
-    }
-    .composer button {
-      border: 1px solid rgba(70, 214, 255, 0.45);
-      background: linear-gradient(180deg, rgba(30, 104, 128, 0.45), rgba(15, 56, 71, 0.65));
-      color: #d9f7ff;
-      border-radius: 10px;
-      padding: 0 18px;
-      font: inherit;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .composer button:disabled { opacity: 0.45; cursor: not-allowed; }
-    .error { color: var(--danger); }
+    *{box-sizing:border-box;margin:0;padding:0}
+    html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'JetBrains Mono',monospace;color:#e0e0e0}
+    .terminal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:10;width:min(700px,calc(100vw - 28px));height:75vh;max-height:820px;display:flex;flex-direction:column;background:rgba(0,0,0,0.82);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.15);border-radius:8px;box-shadow:0 0 60px rgba(0,255,255,0.06);overflow:hidden}
+    .terminal-header{flex-shrink:0;padding:18px 20px 14px}
+    .terminal-title{font-size:clamp(1.1rem,3vw,1.45rem);font-weight:700;letter-spacing:0.55em;text-indent:0.55em;color:#e0e0e0;text-shadow:0 0 24px rgba(0,255,255,0.25)}
+    #chatWindow{flex:1;overflow-y:auto;padding:14px 18px;font-size:13px;line-height:1.65;scrollbar-width:thin;scrollbar-color:rgba(0,255,255,0.25) transparent}
+    .msg{margin-bottom:14px;white-space:pre-wrap;word-break:break-word}
+    .msg.user .prefix{color:#00ffff;font-weight:600}
+    .msg.user .body{color:#e0e0e0}
+    .msg.jarvis .prefix{font-weight:700;background:linear-gradient(90deg,#00ffff,#4488ff,#aa44ff,#ffffff,#00ffff);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:irid 8s linear infinite}
+    @keyframes irid{0%{background-position:0% 50%}100%{background-position:200% 50%}}
+    .msg.jarvis .body{color:#e0e0e0}
+    .msg.system .prefix{color:#555}
+    .msg.system .body{color:rgba(160,160,160,0.75);font-style:italic}
+    .input-row{flex-shrink:0;border-top:1px solid rgba(0,255,255,0.35);padding:12px 16px 16px;display:flex;align-items:center;background:rgba(0,0,0,0.35)}
+    .prompt-prefix{color:#00ffff;font-weight:600;font-size:13px;flex-shrink:0;user-select:none;padding-right:6px}
+    #messageInput{flex:1;border:none;background:transparent;color:#e0e0e0;font:inherit;font-size:13px;outline:none;padding:8px 0;caret-color:#00ffff}
+    #messageInput:disabled{opacity:0.45}
+    .scanlines{position:fixed;inset:0;z-index:5;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,0.12),rgba(0,0,0,0.12) 1px,transparent 1px,transparent 3px);opacity:0.03}
+    .vignette{position:fixed;inset:0;z-index:6;pointer-events:none;background:radial-gradient(ellipse 70% 65% at 50% 50%,transparent 0%,transparent 45%,rgba(0,0,0,0.75) 100%)}
   </style>
 </head>
 <body>
+  <div class="scanlines"></div>
+  <div class="vignette"></div>
   <main class="terminal">
     <header class="terminal-header">
-      <div class="title">Jarvis Interface</div>
-      <div id="status" class="status">Idle</div>
+      <h1 class="terminal-title">J A R V I S</h1>
     </header>
-    <section id="chatWindow" class="chat-window" aria-live="polite"></section>
-    <form id="chatForm" class="composer" autocomplete="off">
-      <input id="messageInput" name="message" type="text" placeholder="Type your message..." maxlength="4000" required>
-      <button id="sendButton" type="submit">Send</button>
-    </form>
+    <section id="chatWindow" aria-live="polite"></section>
+    <div class="input-row">
+      <span class="prompt-prefix">&gt;&gt;&gt; </span>
+      <input id="messageInput" type="text" maxlength="4000" aria-label="Message" autocomplete="off">
+    </div>
   </main>
-  <script src="./renderer.js"></script>
+
+  <script>
+  (function(){
+    const win=document.getElementById('chatWindow');
+    const inp=document.getElementById('messageInput');
+
+    function addMsg(role,text,tw){
+      const d=document.createElement('div');
+      d.className='msg '+role;
+      const pre=document.createElement('span');
+      pre.className='prefix';
+      pre.textContent=role==='user'?'> ':role==='jarvis'?'JARVIS :: ':'[ SYSTEM ] ';
+      const bod=document.createElement('span');
+      bod.className='body';
+      d.appendChild(pre);d.appendChild(bod);
+      win.appendChild(d);
+      win.scrollTop=win.scrollHeight;
+      if(role==='jarvis'&&tw!==false){
+        return new Promise(res=>{
+          let i=0;
+          (function tick(){
+            if(i>=text.length){win.scrollTop=win.scrollHeight;res();return;}
+            bod.textContent=text.slice(0,++i);
+            win.scrollTop=win.scrollHeight;
+            requestAnimationFrame(tick);
+          })();
+        });
+      }
+      bod.textContent=text;
+      return Promise.resolve();
+    }
+
+    inp.addEventListener('keydown',async function(e){
+      if(e.key!=='Enter')return;
+      e.preventDefault();
+      if(inp.disabled)return;
+      const msg=inp.value.trim();
+      if(!msg)return;
+      addMsg('user',msg);
+      inp.value='';
+      inp.disabled=true;
+      try{
+        const p = await window.jarvis.chat({ message: String(msg) });
+        await addMsg('jarvis', p.response);
+      }catch(err){
+        addMsg('system','Error: '+err.message);
+      }finally{
+        inp.disabled=false;
+        inp.focus();
+      }
+    });
+
+    addMsg('jarvis',"Hi, I'm Jarvis. How can I help today?");
+    inp.focus();
+  })();
+  </script>
+
+  <script>
+  // TESSERACT
+  (function(){
+    if(typeof THREE==='undefined'){console.error('THREE not loaded');return;}
+    console.log('THREE ready',THREE.REVISION);
+
+    // 4D vertices and edges
+    const V=[];
+    for(let i=0;i<16;i++)V.push([(i&1)?1:-1,(i&2)?1:-1,(i&4)?1:-1,(i&8)?1:-1]);
+    const E=[];
+    for(let a=0;a<16;a++)for(let b=a+1;b<16;b++){const d=a^b;if(d&&!(d&(d-1)))E.push([a,b]);}
+
+    function proj(v,axw,ayw,azw){
+      let [x,y,z,w]=v,t;
+      t=x*Math.cos(axw)-w*Math.sin(axw);w=x*Math.sin(axw)+w*Math.cos(axw);x=t;
+      t=y*Math.cos(ayw)-w*Math.sin(ayw);w=y*Math.sin(ayw)+w*Math.cos(ayw);y=t;
+      t=z*Math.cos(azw)-w*Math.sin(azw);w=z*Math.sin(azw)+w*Math.cos(azw);z=t;
+      const s=3.5/(2.5-w);
+      return new THREE.Vector3(x*s,y*s,z*s);
+    }
+
+    // Renderer
+    const R=new THREE.WebGLRenderer({antialias:true});
+    R.setPixelRatio(window.devicePixelRatio);
+    R.setSize(window.innerWidth,window.innerHeight);
+    R.domElement.style.cssText='position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:0;pointer-events:none;';
+    document.body.insertBefore(R.domElement,document.body.firstChild);
+
+    const S=new THREE.Scene();
+    S.background=new THREE.Color(0x000000);
+    S.fog=new THREE.FogExp2(0x000000,0.022);
+
+    const C=new THREE.PerspectiveCamera(65,window.innerWidth/window.innerHeight,0.1,300);
+
+    S.add(new THREE.AmbientLight(0x0a0a1a,0.4));
+    const WL=new THREE.PointLight(0xFFCC44,3,40);S.add(WL);
+    const cl=new THREE.PointLight(0x4488FF,0.8,25);cl.position.set(5,3,0);S.add(cl);
+    const bl=new THREE.PointLight(0xFF8844,1.2,25);bl.position.set(-4,-2,-5);S.add(bl);
+
+    const BM=new THREE.MeshStandardMaterial({color:0x1a1a2e,metalness:0.9,roughness:0.2});
+    const LM=new THREE.MeshStandardMaterial({color:0xFFEEAA,emissive:new THREE.Color(0xFFCC44),emissiveIntensity:2,roughness:1});
+    const BG=new THREE.CylinderGeometry(0.04,0.04,1,6);
+    const LG=new THREE.CylinderGeometry(0.018,0.018,0.92,4);
+
+    const N=8,SP=9,GS=[];
+    for(let i=0;i<N;i++){
+      const g=new THREE.Group();
+      const em=[];
+      for(let e=0;e<E.length;e++){
+        const bm=new THREE.Mesh(BG,BM);
+        const lm=new THREE.Mesh(LG,LM);
+        g.add(bm);g.add(lm);
+        em.push({bm,lm});
+      }
+      g.userData={absZ:-i*SP,em};
+      S.add(g);GS.push(g);
+    }
+
+    const UP=new THREE.Vector3(0,1,0);
+    function upd(g,axw,ayw,azw){
+      const pts=V.map(v=>proj(v,axw,ayw,azw));
+      E.forEach(([a,b],i)=>{
+        const pA=pts[a],pB=pts[b];
+        const dir=new THREE.Vector3().subVectors(pB,pA);
+        const len=dir.length();
+        if(len<0.001)return;
+        const mid=new THREE.Vector3().addVectors(pA,pB).multiplyScalar(0.5);
+        const q=new THREE.Quaternion().setFromUnitVectors(UP,dir.clone().normalize());
+        const {bm,lm}=g.userData.em[i];
+        bm.position.copy(mid);bm.quaternion.copy(q);bm.scale.set(1,len,1);
+        lm.position.copy(mid);lm.quaternion.copy(q);lm.scale.set(1,len,1);
+      });
+    }
+
+    let axw=0,ayw=0,azw=0,t=0;
+    const FALL_SPEED=0.01;
+    
+    // Initialize group absolute Z positions
+    GS.forEach((g,i)=>{ g.userData.absZ = -i*SP; });
+    
+    function animate(){
+      requestAnimationFrame(animate);
+      t+=0.016;
+      axw+=0.001;ayw+=0.0008;azw+=0.0006;
+      
+      // Update all group geometry
+      GS.forEach(g=>upd(g,axw,ayw,azw));
+      
+      // Move all groups forward (toward camera = increase Z)
+      GS.forEach(g=>{ g.userData.absZ += FALL_SPEED; });
+      
+      // Camera stays fixed, world moves toward it
+      const cx=Math.sin(t*0.04)*0.5;
+      const cy=Math.cos(t*0.03)*0.35;
+      C.position.set(cx,cy,8);
+      C.lookAt(Math.sin(t*0.04)*0.2,Math.cos(t*0.03)*0.15,-100);
+      
+      // Recycle groups that have passed the camera
+      GS.forEach(g=>{
+        if(g.userData.absZ > 12){
+          // Find the group with the smallest absZ (furthest back)
+          let mn=Infinity;
+          GS.forEach(gg=>{ if(gg.userData.absZ<mn) mn=gg.userData.absZ; });
+          g.userData.absZ = mn - SP;
+        }
+        g.position.z = g.userData.absZ;
+      });
+      
+      WL.intensity=2.5+Math.sin(t*0.5)*0.5;
+      R.render(S,C);
+    }
+
+    window.addEventListener('resize',()=>{
+      R.setSize(window.innerWidth,window.innerHeight);
+      C.aspect=window.innerWidth/window.innerHeight;
+      C.updateProjectionMatrix();
+    });
+
+    animate();
+  })();
+  </script>
 </body>
 </html>

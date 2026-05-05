@@ -7,7 +7,7 @@ const {
 
 const OLLAMA_GENERATE_URL =
   process.env.OLLAMA_URL || 'http://localhost:11434/api/generate';
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3';
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.2:3b';
 const OLLAMA_TIMEOUT_MS = process.env.OLLAMA_TIMEOUT_MS
   ? Number(process.env.OLLAMA_TIMEOUT_MS)
   : 120000;

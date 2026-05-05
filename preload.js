@@ -3,7 +3,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('jarvis', {
-  chat: (message) => ipcRenderer.invoke('jarvis:chat', { message }),
+  chat: (payload) => ipcRenderer.invoke('jarvis:chat', payload),
   memory: {
     save: (category, content, source = '') =>
       ipcRenderer.invoke('jarvis:memory', { action: 'save', category, content, source }),

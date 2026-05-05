@@ -1,7 +1,7 @@
 'use strict';
 
 const OLLAMA_URL = 'http://localhost:11434/api/generate';
-const OLLAMA_MODEL = 'llama3';
+const OLLAMA_MODEL = 'llama3.2:3b';
 
 const SYSTEM_PROMPT = `You are a precise memory classifier for a personal AI assistant. 
 Analyze the input and respond ONLY with a single valid JSON object. 
