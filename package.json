@@ -21,7 +21,6 @@
   "author": "Sentinel Prime",
   "license": "MIT",
   "dependencies": {
-    "@lancedb/lancedb": "^0.18.1",
     "auto-launch": "^5.0.6",
     "better-sqlite3": "^12.9.0",
     "dotenv": "^16.4.5",
@@ -31,15 +30,12 @@
     "uuid": "^14.0.0"
   },
   "devDependencies": {
-    "@electron/rebuild": "^4.0.4",
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8"
   },
   "build": {
     "appId": "com.sentinelprime.jarvis",
     "productName": "Jarvis",
-    "copyright": "Copyright © Sentinel Prime",
-    "compression": "maximum",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -48,25 +44,16 @@
       "**/*",
       "!dist/**",
       "!test-harness/**",
-      "!local-first/**",
-      "!build/**",
-      "!**/*.log",
-      "!.git/**"
+      "!**/*.log"
     ],
     "asar": true,
-    "asarUnpack": [
-      "**/*.node"
-    ],
     "mac": {
       "category": "public.app-category.productivity",
       "target": [
         "dmg"
-      ],
-      "icon": "build/icon.ico"
+      ]
     },
     "win": {
-      "icon": "build/icon.ico",
-      "artifactName": "${productName}-Setup-${version}.${ext}",
       "target": [
         {
           "target": "nsis",
@@ -80,20 +67,14 @@
       "target": [
         "AppImage"
       ],
-      "category": "Utility",
-      "icon": "build/icon.ico"
+      "category": "Utility"
     },
     "nsis": {
       "oneClick": true,
       "perMachine": false,
       "allowToChangeInstallationDirectory": false,
-      "allowElevation": true,
-      "installerIcon": "build/icon.ico",
-      "uninstallerIcon": "build/icon.ico",
       "include": "build/installer.nsh",
-      "runAfterFinish": true,
-      "deleteAppDataOnUninstall": false,
-      "warningsAsErrors": false
+      "runAfterFinish": true
     },
     "publish": [
       {

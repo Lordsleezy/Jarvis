@@ -32,7 +32,7 @@ module.exports = function createMemoryRouter({ memoryApi }) {
     try {
       const query = String(req.query.query || '');
       const limit = Number(req.query.limit || 5);
-      res.json(await memoryApi.findRelevantMemories(query, limit));
+      res.json(memoryApi.findRelevantMemories(query, limit));
     } catch (err) {
       next(err);
     }
@@ -59,12 +59,8 @@ module.exports = function createMemoryRouter({ memoryApi }) {
     res.status(204).send();
   });
 
-  router.get('/memories/export', async (req, res, next) => {
-    try {
-      res.type('text/plain; charset=utf-8').send(await memoryApi.exportSmartContext('general'));
-    } catch (err) {
-      next(err);
-    }
+  router.get('/memories/export', (req, res) => {
+    res.type('text/plain; charset=utf-8').send(memoryApi.exportContextString());
   });
 
   return router;
