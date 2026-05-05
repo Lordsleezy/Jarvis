@@ -5,7 +5,7 @@ const { promisify } = require('util');
 
 const execFileAsync = promisify(execFile);
 const OLLAMA_HEALTH_URL = 'http://localhost:11434';
-const OLLAMA_DOWNLOAD_URL = 'https://ollama.com/download/OllamaSetup.exe';
+const OLLAMA_DOWNLOAD_URL = 'https://ollama.com/download/windows';
 const OLLAMA_MODEL = 'llama3';
 
 async function isOllamaReachable() {
@@ -25,19 +25,13 @@ async function installOllamaOnWindows(progress) {
     'Start-Process -FilePath $installer -ArgumentList \'/S\' -Wait',
   ].join('; ');
 
-  await execFileAsync(
-    'powershell.exe',
-    [
-      '-NoProfile',
-      '-WindowStyle',
-      'Hidden',
-      '-ExecutionPolicy',
-      'Bypass',
-      '-Command',
-      script,
-    ],
-    { windowsHide: true },
-  );
+  await execFileAsync('powershell.exe', [
+    '-NoProfile',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-Command',
+    script,
+  ]);
   progress('Installing AI brain');
 }
 

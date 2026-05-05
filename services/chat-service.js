@@ -5,7 +5,8 @@ const {
   DEFAULT_REMOTE_SERVER_URL,
 } = require('./mode-manager');
 
-const OLLAMA_GENERATE_URL = 'http://localhost:11434/api/generate';
+const OLLAMA_GENERATE_URL =
+  process.env.OLLAMA_URL || 'http://localhost:11434/api/generate';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3';
 const OLLAMA_TIMEOUT_MS = process.env.OLLAMA_TIMEOUT_MS
   ? Number(process.env.OLLAMA_TIMEOUT_MS)
@@ -38,12 +39,7 @@ function createChatService({ memoryApi, settings }) {
   }
 
   async function queryLocalMode(userMessage) {
-    let context = '';
-    if (typeof memoryApi.exportFullContext === 'function') {
-      context = memoryApi.exportFullContext();
-    } else if (typeof memoryApi.exportContextString === 'function') {
-      context = memoryApi.exportContextString();
-    }
+    const context = memoryApi.exportContextString();
     const prompt = context.length > 0 ? `${context}\n\nUser: ${userMessage}` : userMessage;
 
     const controller = new AbortController();

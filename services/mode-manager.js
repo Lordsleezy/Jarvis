@@ -1,7 +1,6 @@
 'use strict';
 
-const DEFAULT_REMOTE_SERVER_URL =
-  process.env.REMOTE_SERVER_URL || 'http://192.168.0.117:3001';
+const DEFAULT_REMOTE_SERVER_URL = 'http://192.168.0.117:3001';
 const DEFAULT_LOCAL_OLLAMA_HEALTH_URL = 'http://localhost:11434';
 
 async function isUrlReachable(url, timeoutMs = 2500) {
