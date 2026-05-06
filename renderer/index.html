@@ -32,9 +32,76 @@
     #messageInput:disabled{opacity:0.45}
     .scanlines{position:fixed;inset:0;z-index:5;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,0.12),rgba(0,0,0,0.12) 1px,transparent 1px,transparent 3px);opacity:0.03}
     .vignette{position:fixed;inset:0;z-index:6;pointer-events:none;background:radial-gradient(ellipse 70% 65% at 50% 50%,transparent 0%,transparent 45%,rgba(0,0,0,0.75) 100%)}
+    #jarvis-intro {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+    }
+    #jarvis-intro-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+    #jarvis-intro-logo {
+      position: relative;
+      z-index: 2;
+      text-align: center;
+      opacity: 0;
+      transition: opacity 1s ease;
+    }
+    #jarvis-intro-logo h1 {
+      font-size: clamp(2.5rem, 8vw, 5rem);
+      font-weight: 700;
+      letter-spacing: 0.5em;
+      text-indent: 0.5em;
+      color: #fff;
+      text-shadow: 0 0 40px rgba(0,234,255,0.8), 0 0 80px rgba(0,234,255,0.4);
+    }
+    #jarvis-intro-logo p {
+      font-size: 0.75rem;
+      letter-spacing: 0.3em;
+      color: #00eaff;
+      margin-top: 10px;
+      opacity: 0.8;
+    }
+    #jarvis-intro-bar-wrap {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 2;
+      width: 180px;
+      height: 2px;
+      background: rgba(0,234,255,0.2);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    #jarvis-intro-bar {
+      height: 100%;
+      width: 0%;
+      background: #00eaff;
+      box-shadow: 0 0 8px #00eaff;
+      transition: width 0.1s linear;
+    }
   </style>
 </head>
 <body>
+  <div id="jarvis-intro">
+    <canvas id="jarvis-intro-canvas"></canvas>
+    <div id="jarvis-intro-logo">
+      <h1>J A R V I S</h1>
+      <p>PERSONAL AI OS</p>
+    </div>
+    <div id="jarvis-intro-bar-wrap">
+      <div id="jarvis-intro-bar"></div>
+    </div>
+  </div>
   <div class="scanlines"></div>
   <div class="vignette"></div>
   <main class="terminal">
@@ -264,6 +331,104 @@
     });
 
     animate();
+  })();
+  </script>
+  <script>
+  (function(){
+    const V=[];
+    for(let i=0;i<16;i++) V.push([(i&1)?1:-1,(i&2)?1:-1,(i&4)?1:-1,(i&8)?1:-1]);
+    const E=[];
+    for(let a=0;a<16;a++) for(let b=a+1;b<16;b++){const d=a^b;if(d&&!(d&(d-1)))E.push([a,b]);}
+
+    function rot4(v,axw,ayw,azw){
+      let [x,y,z,w]=v,t;
+      t=x*Math.cos(axw)-w*Math.sin(axw);w=x*Math.sin(axw)+w*Math.cos(axw);x=t;
+      t=y*Math.cos(ayw)-w*Math.sin(ayw);w=y*Math.sin(ayw)+w*Math.cos(ayw);y=t;
+      t=z*Math.cos(azw)-w*Math.sin(azw);w=z*Math.sin(azw)+w*Math.cos(azw);z=t;
+      const s=3.5/(2.5-w);
+      return [x*s, y*s];
+    }
+
+    const canvas = document.getElementById('jarvis-intro-canvas');
+    const ctx = canvas.getContext('2d');
+    const logo = document.getElementById('jarvis-intro-logo');
+    const bar = document.getElementById('jarvis-intro-bar');
+    const introEl = document.getElementById('jarvis-intro');
+
+    const DURATION = 6000;
+    let start = null;
+    let axw=0, ayw=0, azw=0;
+    let edgesBuilt = 0;
+    let lastEdgeTime = 0;
+    let done = false;
+
+    function resize(){
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    function draw(ts){
+      if(!start) start = ts;
+      const elapsed = ts - start;
+      const progress = Math.min(elapsed / DURATION, 1);
+
+      bar.style.width = (progress * 100) + '%';
+
+      if(elapsed - lastEdgeTime > 80 && edgesBuilt < E.length){
+        edgesBuilt++;
+        lastEdgeTime = elapsed;
+      }
+
+      const speed = 0.004 + progress * 0.015;
+      axw += speed * 0.8;
+      ayw += speed * 0.6;
+      azw += speed * 0.4;
+
+      const scale = Math.min(elapsed/2000,1) * Math.min(canvas.width, canvas.height) * 0.3;
+      const cx = canvas.width/2, cy = canvas.height/2;
+
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+
+      const pts = V.map(v => rot4(v,axw,ayw,azw));
+
+      for(let i=0;i<edgesBuilt;i++){
+        const [a,b]=E[i];
+        const [ax,ay]=pts[a];
+        const [bx,by]=pts[b];
+
+        ctx.beginPath();
+        ctx.moveTo(cx+ax*scale, cy+ay*scale);
+        ctx.lineTo(cx+bx*scale, cy+by*scale);
+        ctx.strokeStyle=`rgba(0,234,255,0.2)`;
+        ctx.lineWidth=5;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(cx+ax*scale, cy+ay*scale);
+        ctx.lineTo(cx+bx*scale, cy+by*scale);
+        ctx.strokeStyle=`rgba(0,234,255,${0.7+progress*0.3})`;
+        ctx.lineWidth=1.5;
+        ctx.stroke();
+      }
+
+      if(elapsed > 3500){
+        logo.style.opacity = Math.min((elapsed-3500)/1500, 1);
+      }
+
+      if(progress >= 1 && !done){
+        done = true;
+        introEl.style.transition = 'opacity 1s ease';
+        introEl.style.opacity = '0';
+        setTimeout(()=>{ introEl.style.display='none'; }, 1000);
+        return;
+      }
+
+      requestAnimationFrame(draw);
+    }
+
+    requestAnimationFrame(draw);
   })();
   </script>
 </body>
