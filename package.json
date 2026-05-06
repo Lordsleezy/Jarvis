@@ -34,6 +34,7 @@
     "electron-builder": "^25.1.8"
   },
   "build": {
+    "icon": "build/icon.ico",
     "appId": "com.sentinelprime.jarvis",
     "productName": "Jarvis",
     "directories": {
@@ -54,6 +55,7 @@
       ]
     },
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         {
           "target": "nsis",
