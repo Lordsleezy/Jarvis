@@ -248,6 +248,29 @@ function configureAutoUpdater() {
 
 function wireIpc() {
   console.log('[Jarvis][startup] wireIpc');
+  ipcMain.handle('jarvis:getVersion', () => app.getVersion());
+
+  ipcMain.handle('jarvis:checkForUpdates', async () => {
+    try {
+      const result = await autoUpdater.checkForUpdates();
+      const info = result?.updateInfo;
+      const current = app.getVersion();
+      const remoteVersion = info?.version ? String(info.version) : null;
+      const updateAvailable =
+        result?.isUpdateAvailable === true ||
+        (remoteVersion && remoteVersion !== current);
+      return {
+        ok: true,
+        updateAvailable: Boolean(updateAvailable),
+        currentVersion: current,
+        remoteVersion,
+      };
+    } catch (err) {
+      log.error('jarvis:checkForUpdates failed:', err);
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
   ipcMain.handle('jarvis:chat', async (_event, payload) => {
     try {
       if (bootstrapState.setupRequired || bootstrapState.setupInProgress) {

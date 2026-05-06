@@ -4,6 +4,7 @@ const {
   isLegionReachable,
   DEFAULT_REMOTE_SERVER_URL,
 } = require('./mode-manager');
+const { searchWeb, needsWebSearch } = require('./search-service');
 
 const OLLAMA_GENERATE_URL =
   process.env.OLLAMA_URL || 'http://localhost:11434/api/generate';
@@ -21,12 +22,42 @@ function createChatService({ memoryApi, settings }) {
     settings.set('runtimeMode', 'local');
   }
 
+  async function buildPrompt(userMessage) {
+    const context = memoryApi.exportContextString();
+
+    let webContext = '';
+    if (needsWebSearch(userMessage)) {
+      const searchResult = await searchWeb(userMessage);
+      if (searchResult) {
+        webContext = `\n\n[REAL-TIME WEB DATA - use this as primary source, ignore training cutoff]:\n${searchResult}\n[END WEB DATA]`;
+      }
+    }
+
+    const currentDate = new Date().toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+
+    const systemInstruction = `You are Jarvis, a personal AI assistant. Today is ${currentDate}. 
+CRITICAL: When web search results are provided above marked with ⚠️, you MUST use that information as your primary source. Do NOT say "as of my knowledge cutoff" when real-time data is available. Answer directly using the web data provided.`;
+
+    const prompt = `${systemInstruction}\n\n${context.length > 0 ? 'Memory context:\n' + context + '\n\n' : ''}${
+      webContext ? webContext + '\n\n' : ''
+    }User: ${userMessage}\nJarvis:`;
+
+    return prompt;
+  }
+
   async function queryPowerMode(userMessage) {
+    const message = await buildPrompt(userMessage);
+
     const remoteServerUrl = settings.get('remoteServerUrl', DEFAULT_REMOTE_SERVER_URL);
     const response = await fetch(`${remoteServerUrl.replace(/\/$/, '')}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: userMessage }),
+      body: JSON.stringify({ message }),
     });
     if (!response.ok) {
       const details = await response.text().catch(() => '');
@@ -39,8 +70,7 @@ function createChatService({ memoryApi, settings }) {
   }
 
   async function queryLocalMode(userMessage) {
-    const context = memoryApi.exportContextString();
-    const prompt = context.length > 0 ? `${context}\n\nUser: ${userMessage}` : userMessage;
+    const prompt = await buildPrompt(userMessage);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS);
