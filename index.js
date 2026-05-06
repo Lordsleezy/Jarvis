@@ -8,6 +8,7 @@ const memoryRouter = require('./routes/memory');
 const chatRouter = require('./routes/chat');
 const { initializeMemoryStore } = require('./memory/db');
 const { createChatService } = require('./services/chat-service');
+const { createGroqChatService } = require('./services/groq-chat-service');
 const { createSettingsManager } = require('./services/settings');
 
 async function startApiServer() {
@@ -18,7 +19,9 @@ async function startApiServer() {
     process.env.JARVIS_USER_DATA_PATH || path.resolve(__dirname, '.jarvis-user-data');
   const memoryApi = await initializeMemoryStore(userDataPath);
   const settings = createSettingsManager(userDataPath);
-  const chatService = createChatService({ memoryApi, settings });
+  const chatService = process.env.GROQ_API_KEY
+    ? createGroqChatService()
+    : createChatService({ memoryApi, settings });
 
   app.use(express.json());
   app.use((req, res, next) => {
